@@ -15,7 +15,7 @@ STOP_DISTANCE = 0.2
 LIDAR_ERROR = 0.05
 SAFE_STOP_DISTANCE = STOP_DISTANCE + LIDAR_ERROR
 
-class Obstacle():
+class Operation():
     def __init__(self):
         self._cmd_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
         self.obstacle()
@@ -76,7 +76,7 @@ class Obstacle():
 def main():
     rospy.init_node('turtlebot3_obstacle')
     try:
-        obstacle = Obstacle()
+        obstacle = Operation()
     except rospy.ROSInterruptException:
         pass
 
