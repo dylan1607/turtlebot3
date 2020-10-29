@@ -8,7 +8,7 @@ from math import radians, copysign, sqrt, pow, pi, atan2
 from tf.transformations import euler_from_quaternion
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist, Point, Quaternion
-
+from std_msgs.msg import Bool
 
 LINEAR_VEL = 0.22
 STOP_DISTANCE = 0.2
@@ -17,9 +17,16 @@ SAFE_STOP_DISTANCE = STOP_DISTANCE + LIDAR_ERROR
 
 class Operation():
     def __init__(self):
-        self._cmd_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
-        self.obstacle()
-        
+        rospy.init_node('factory', anonymous=False)
+        rospy.on_shutdown(self.shutdown)
+        self.cmd_vel = rospy.Publisher('cmd_vel', Twist, queue_size=5)
+        #self.obstacle()
+        rospy.Subscriber('/relay1', Bool, self.callback)
+
+    def callback(self,data):
+        rospy.loginfo(data.data)
+        #rospy.spin()
+
     def get_scan(self):
         scan = rospy.wait_for_message('scan', LaserScan)
         scan_filter = []
@@ -63,22 +70,24 @@ class Operation():
                 if turtlebot_moving:
                     twist.linear.x = 0.0
                     twist.angular.z = 0.0
-                    self._cmd_pub.publish(twist)
+                    self.cmd_vel.publish(twist)
                     turtlebot_moving = False
                     rospy.loginfo('Stop!')
             else:
                 twist.linear.x = LINEAR_VEL
                 twist.angular.z = 0.0
-                self._cmd_pub.publish(twist)
+                self.cmd_vel.publish(twist)
                 turtlebot_moving = True
                 rospy.loginfo('Distance of the obstacle : %f', min_distance)
+    
+    def shutdown(self):
+        self.cmd_vel.publish(Twist())
+        rospy.sleep(1)
 
-def main():
-    rospy.init_node('turtlebot3_obstacle')
-    try:
-        obstacle = Operation()
-    except rospy.ROSInterruptException:
-        pass
 
 if __name__ == '__main__':
-    main()
+    try:
+        while not rospy.is_shutdown():
+            Operation()
+    except: 
+        rospy.loginfo("Shutdown Program")

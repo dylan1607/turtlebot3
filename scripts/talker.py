@@ -37,7 +37,7 @@
 ## to the 'chatter' topic
 
 import rospy
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 
 def talker():
     pub = rospy.Publisher('chatter', String, queue_size=10)
