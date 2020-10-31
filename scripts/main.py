@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-import subprocess
-import sys
-import psutil
-import signal
+
 import rospy
 import math
 import tf
@@ -12,7 +9,7 @@ from tf.transformations import euler_from_quaternion
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist, Point, Quaternion
 from std_msgs.msg import Bool
-from roslaunch.parent import ROSLaunchParent
+
 
 LINEAR_VEL = 0.22
 STOP_DISTANCE = 0.4
@@ -20,61 +17,10 @@ LIDAR_ERROR = 0.05
 SAFE_STOP_DISTANCE = STOP_DISTANCE + LIDAR_ERROR
 count = []
 
-class Start(object):
-    __init = False
-    def __init__(self):
-        if Start.__init:
-            #raise Exception('Another Instance RosCore running !!')
-            rospy.logfatal('Another Instance Roscore Running!!!')
-        else:
-            Start.__init =  True
-            self.run()
-
-    def run(self):
-        try:
-            self.roscore_process = subprocess.Popen('roscore')
-            self.roscore_pid = self.roscore_process.pid
-            rospy.sleep(1)
-            self.rosweb = subprocess.Popen('roslaunch rosbridge_server rosbridge_websocket.launch', shell=True)
-            self.rosweb_pid = self.rosweb.pid
-            rospy.sleep(3)
-            
-            #self.terminal()
-        except OSError as e:
-            sys.stderr.write('Roscore could not run')
-            #self.terminal()
-            raise e
-
-    def terminal(self):
-        self.kill_process(self.rosweb_pid)
-        self.rosweb.terminate()
-        self.rosweb.wait()
-        self.kill_process(self.roscore_pid)
-        self.roscore_process.terminate()
-        self.roscore_process.wait()
-        Start.__init = False
-
-    def kill_process(self,pid,sig=signal.SIGTERM):
-        try:
-            parent = psutil.Process(pid)
-            print('Process PID: ',pid)
-            print(parent)
-        except psutil.NoSuchProcess:
-            print("parent process not existing")
-            return
-        children = parent.children(recursive=True)
-        print(children)
-        try:
-            for process in children:
-                process.send_signal(sig)
-        except:
-            pass
-
 
 class Operation():
     def __init__(self):
         rospy.init_node('factory', anonymous=False)
-        rospy.logwarn('----------Server Running Complete----------')
         #rospy.on_shutdown(self.shutdown)
         self.cmd_vel = rospy.Publisher('cmd_vel', Twist, queue_size=5)
         self.r = rospy.Rate(10)
@@ -86,8 +32,7 @@ class Operation():
         rospy.Subscriber('station3', Bool, self.callback3)
 
         #--------------------------------------------------------------------
-        self.exit = Start()
-        self.obstacle()
+        self.program()
         rospy.spin() #IMPORTANT-keep python excuted and existing until this node is stop
 
     def callback1(self,data):
@@ -163,7 +108,7 @@ class Operation():
         
         return scan_filter
 
-    def get_point(self):
+    def get_point(self,goal_x,goal_y,goal_z):
         self.odom_frame = 'odom'
         position = Point()
         move_cmd = Twist()
@@ -241,7 +186,7 @@ class Operation():
             self.cmd_vel.publish(move_cmd)
             self.r.sleep()
         rospy.loginfo("Stopping the robot...")
-        self.cmd_vel.publish(Twist())
+        self.cmd_vel.publish(move_cmd())
     def get_odom(self):
         try:
             (trans, rot) = self.tf_listener.lookupTransform(self.odom_frame, self.base_frame, rospy.Time(0))
@@ -253,23 +198,22 @@ class Operation():
 
         return (Point(*trans), rotation[2])
 
-    def obstacle(self):
-        twist = Twist()
+    def program(self):
         turtlebot_moving = True
         move_cmd = Twist()
         while not rospy.is_shutdown():
             lidar_distances = self.get_scan()
             min_distance = min(lidar_distances)
-
+            (x,y,z) = self.init_station()
             if min_distance < SAFE_STOP_DISTANCE:
                 if turtlebot_moving:
                     move_cmd.linear.x = 0.0
                     move_cmd.angular.z = 0.0
-                    self.cmd_vel.publish(twist)
+                    self.cmd_vel.publish(move_cmd)
                     turtlebot_moving = False
                     rospy.loginfo('Stop!')
-            else:
-                self.get_point()
+            elif x!='' and y!='' and z!='':
+                self.init_station(x,y,z)
                 turtlebot_moving = True
                 rospy.loginfo('Distance of the obstacle : %f', min_distance)
     
@@ -280,8 +224,6 @@ class Operation():
 
 
 if __name__ == '__main__':
-    first = Start()
-    
     try:
         while not rospy.is_shutdown():
             Operation()

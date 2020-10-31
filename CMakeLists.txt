@@ -169,6 +169,8 @@ catkin_install_python(PROGRAMS
   scripts/add_two_ints_server.py 
   scripts/add_two_ints_client.py
   scripts/main.py
+  scripts/server.py
+  scripts/exit.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
