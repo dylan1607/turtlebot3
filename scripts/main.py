@@ -62,20 +62,17 @@ class Operation():
             rospy.logfatal('Station3 Stop !!!')
             count.remove(3)
 
-    def init_station(self):
-        try:
-            if count[0] == 1:
-                pos = [0.2,0]
-                ang = 0 
-            elif count[0] == 2:
-                pos = [2,0]
-                ang = 0
-            elif count[0] == 3:
-                pos = [3,0]
-                ang = 0
-            return (pos[0], pos[1], ang) #-180 < ang <180, position(mm)
-        except:
-            pass
+    def get_station(self):
+        if count[0] == 1:
+            pos = [0.2,0]
+            ang = 0 
+        elif count[0] == 2:
+            pos = [2,0]
+            ang = 0
+        elif count[0] == 3:
+            pos = [3,0]
+            ang = 0
+        return (pos[0], pos[1], ang) #-180 < ang <180, position(mm)
 
     def get_scan(self):
         scan = rospy.wait_for_message('scan', LaserScan)
@@ -108,7 +105,7 @@ class Operation():
         
         return scan_filter
 
-    def get_point(self,goal_x,goal_y,goal_z):
+    def get_point(self, goal_x, goal_y, goal_z, position, rotation):
         self.odom_frame = 'odom'
         position = Point()
         move_cmd = Twist()
@@ -125,20 +122,16 @@ class Operation():
                 rospy.loginfo("Cannot find transform between odom and base_link or base_footprint")
                 rospy.signal_shutdown("tf Exception")
 
-        (position, rotation) = self.get_odom()
+        #(position, rotation) = self.get_odom()
         last_rotation = 0
         linear_speed  = 0.3
         angular_speed = 0.3
-        if self.init_station():
-            (goal_x, goal_y, goal_z) = self.init_station()
-        else:
-            return None
         goal_z = np.deg2rad(goal_z)
         goal_distance = sqrt(pow(goal_x - position.x, 2) + pow(goal_y - position.y, 2))
         distance = goal_distance
 
         while distance > 0.05:
-            (position, rotation) = self.get_odom()
+            #(position, rotation) = self.get_odom()
             x_start = position.x
             y_start = position.y
             path_angle = atan2(goal_y - y_start, goal_x- x_start)
@@ -202,20 +195,26 @@ class Operation():
         turtlebot_moving = True
         move_cmd = Twist()
         while not rospy.is_shutdown():
-            lidar_distances = self.get_scan()
-            min_distance = min(lidar_distances)
-            (x,y,z) = self.init_station()
-            if min_distance < SAFE_STOP_DISTANCE:
-                if turtlebot_moving:
-                    move_cmd.linear.x = 0.0
-                    move_cmd.angular.z = 0.0
-                    self.cmd_vel.publish(move_cmd)
-                    turtlebot_moving = False
-                    rospy.loginfo('Stop!')
-            elif x!='' and y!='' and z!='':
-                self.init_station(x,y,z)
-                turtlebot_moving = True
-                rospy.loginfo('Distance of the obstacle : %f', min_distance)
+            if len(count) > 0:
+                (x,y,z) = self.get_station()
+                (pos, rot) = self.get_odom()
+                lidar_distances = self.get_scan()
+                min_distance = min(lidar_distances)
+                if min_distance < SAFE_STOP_DISTANCE:
+                    if turtlebot_moving:
+                        move_cmd.linear.x = 0.0
+                        move_cmd.linear.y = 0.0
+                        move_cmd.angular.z = 0.0
+                        self.cmd_vel.publish(move_cmd)
+                        turtlebot_moving = False
+                        rospy.loginfo('Stop!')
+                else:
+                    turtlebot_moving = True
+                    rospy.loginfo('Distance of the obstacle : %f', min_distance)
+                    self.get_point(x, y, z, pos, rot)
+            else:
+                pass
+            
     
     def shutdown(self):
         self.cmd_vel.publish(Twist())
@@ -228,6 +227,5 @@ if __name__ == '__main__':
         while not rospy.is_shutdown():
             Operation()
     except: 
-        first.terminal()
         rospy.loginfo("Shutdown Program")
         
