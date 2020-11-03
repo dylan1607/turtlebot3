@@ -21,8 +21,12 @@ class Start(object):
             rospy.sleep(1)
             self.rosweb = subprocess.Popen('roslaunch rosbridge_server rosbridge_websocket.launch', shell=True)
             self.rosweb_pid = self.rosweb.pid
-            rospy.sleep(2)
-            print('----------------Server Ready-----------------')
+            rospy.sleep(4)
+            print('----------------------------------------------------------------------------')
+            print('--------------------------------- SERVER READY -----------------------------')
+            print('---------------------- PLEASE RUN AGV IN ANOTHER TERMINAL ------------------')
+            print('----------------------------------------------------------------------------')
+
         except OSError as e:
             sys.stderr.write('Roscore could not run')
             self.terminal()
