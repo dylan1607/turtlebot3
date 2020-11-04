@@ -105,7 +105,7 @@ class Operation():
         
         return scan_filter
 
-    def get_point(self, goal_x, goal_y, goal_z, position, rotation):
+    def get_point(self, goal_x, goal_y, goal_z):
         self.odom_frame = 'odom'
         position = Point()
         move_cmd = Twist()
@@ -123,15 +123,14 @@ class Operation():
                 rospy.signal_shutdown("tf Exception")
 
         #(position, rotation) = self.get_odom()
-        last_rotation = 0
         linear_speed  = 0.3
         angular_speed = 0.3
         goal_z = np.deg2rad(goal_z)
         goal_distance = sqrt(pow(goal_x - position.x, 2) + pow(goal_y - position.y, 2))
         distance = goal_distance
 
-        while distance > 0.05:
-            #(position, rotation) = self.get_odom()
+        if distance > 0.02:
+            (position, rotation) = self.get_odom()
             x_start = position.x
             y_start = position.y
             path_angle = atan2(goal_y - y_start, goal_x- x_start)
@@ -141,9 +140,9 @@ class Operation():
                     path_angle = -2*pi + path_angle
                 elif goal_y >= 0 and y_start > goal_y:
                     path_angle = 2*pi + path_angle
-            if last_rotation > pi-0.1 and rotation <= 0:
+            if self.last_rotation > pi-0.1 and rotation <= 0:
                 rotation = 2*pi + rotation
-            elif last_rotation < -pi+0.1 and rotation > 0:
+            elif self.last_rotation < -pi+0.1 and rotation > 0:
                 rotation = -2*pi + rotation
             move_cmd.angular.z = angular_speed * path_angle-rotation
 
@@ -155,12 +154,11 @@ class Operation():
             else:
                 move_cmd.angular.z = max(move_cmd.angular.z, -1.5)
 
-            last_rotation = rotation
+            self.last_rotation = rotation
             self.cmd_vel.publish(move_cmd)
-            self.r.sleep()
-        (position, rotation) = self.get_odom()
+            #self.r.sleep()
 
-        while abs(rotation - goal_z) > 0.05:
+        elif abs(rotation - goal_z) > 0.02:
             (position, rotation) = self.get_odom()
             if goal_z >= 0:
                 if rotation <= goal_z and rotation >= goal_z - pi:
@@ -177,9 +175,11 @@ class Operation():
                     move_cmd.linear.x = 0.00
                     move_cmd.angular.z = 0.1
             self.cmd_vel.publish(move_cmd)
-            self.r.sleep()
-        rospy.loginfo("Stopping the robot...")
-        self.cmd_vel.publish(move_cmd())
+            #self.r.sleep()
+
+        #rospy.loginfo("Stopping the robot...")
+        #self.cmd_vel.publish(move_cmd())
+
     def get_odom(self):
         try:
             (trans, rot) = self.tf_listener.lookupTransform(self.odom_frame, self.base_frame, rospy.Time(0))
@@ -194,10 +194,10 @@ class Operation():
     def program(self):
         turtlebot_moving = True
         move_cmd = Twist()
+        self.last_rotation = 0
         while not rospy.is_shutdown():
             if len(count) > 0:
                 (x,y,z) = self.get_station()
-                (pos, rot) = self.get_odom()
                 lidar_distances = self.get_scan()
                 min_distance = min(lidar_distances)
                 if min_distance < SAFE_STOP_DISTANCE:
@@ -211,7 +211,7 @@ class Operation():
                 else:
                     turtlebot_moving = True
                     rospy.loginfo('Distance of the obstacle : %f', min_distance)
-                    self.get_point(x, y, z, pos, rot)
+                    self.get_point(x, y, z)
             else:
                 pass
             
