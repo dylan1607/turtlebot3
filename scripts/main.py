@@ -12,7 +12,8 @@ from std_msgs.msg import Bool
 
 
 LINEAR_VEL = 0.22
-STOP_DISTANCE = 0.4
+angular_speed = 0.1
+STOP_DISTANCE = 0.2
 LIDAR_ERROR = 0.05
 SAFE_STOP_DISTANCE = STOP_DISTANCE + LIDAR_ERROR
 count = []
@@ -33,7 +34,7 @@ class Operation():
 
         #--------------------------------------------------------------------
         self.program()
-        rospy.spin() #IMPORTANT-keep python excuted and existing until this node is stop
+        #rospy.spin() #IMPORTANT-keep python excuted and existing until this node is stop
 
     def callback1(self,data):
         if data.data == True:
@@ -64,11 +65,11 @@ class Operation():
 
     def get_station(self):
         if count[0] == 1:
-            pos = [0.2,0]
-            ang = 0 
+            pos = [0.1,0]
+            ang = 90 
         elif count[0] == 2:
-            pos = [2,0]
-            ang = 0
+            pos = [0,0]
+            ang = -90
         elif count[0] == 3:
             pos = [3,0]
             ang = 0
@@ -82,7 +83,7 @@ class Operation():
         samples = len(scan.ranges)  # The number of samples is defined in 
                                     # turtlebot3_<model>.gazebo.xacro file,
                                     # the default is 360.
-        samples_view = 40            # 1 <= samples_view <= samples
+        samples_view = 20            # 1 <= samples_view <= samples
         
         if samples_view > samples:
             samples_view = samples
@@ -102,7 +103,8 @@ class Operation():
             left = left + left_lidar_samples[i]
             right = right + right_lidar_samples[i]
         scan_filter = min(left/(samples_view/2), right/(samples_view/2))
-        
+        if scan_filter == 0:
+            scan_filter = 3.5
         return scan_filter
 
     def get_point(self, goal_x, goal_y, goal_z):
@@ -122,14 +124,13 @@ class Operation():
                 rospy.loginfo("Cannot find transform between odom and base_link or base_footprint")
                 rospy.signal_shutdown("tf Exception")
 
-        #(position, rotation) = self.get_odom()
+        (position, rotation) = self.get_odom()
         linear_speed  = 0.5
-        angular_speed = 0.5
         goal_z = np.deg2rad(goal_z)
         goal_distance = sqrt(pow(goal_x - position.x, 2) + pow(goal_y - position.y, 2))
         distance = goal_distance
 
-        if distance > 0.02:
+        if distance >= 0.01:
             (position, rotation) = self.get_odom()
             x_start = position.x
             y_start = position.y
@@ -156,26 +157,28 @@ class Operation():
 
             self.last_rotation = rotation
             self.cmd_vel.publish(move_cmd)
-            #self.r.sleep()
+            self.r.sleep()
 
-        elif abs(rotation - goal_z) > 0.02:
+        elif abs(self.last_rotation - goal_z) >= 0.01:
             (position, rotation) = self.get_odom()
             if goal_z >= 0:
                 if rotation <= goal_z and rotation >= goal_z - pi:
                     move_cmd.linear.x = 0.00
-                    move_cmd.angular.z = 0.1
+                    move_cmd.angular.z = angular_speed
                 else:
                     move_cmd.linear.x = 0.00
-                    move_cmd.angular.z = -0.1
+                    move_cmd.angular.z = -angular_speed
             else:
                 if rotation <= goal_z + pi and rotation > goal_z:
                     move_cmd.linear.x = 0.00
-                    move_cmd.angular.z = -0.1
+                    move_cmd.angular.z = -angular_speed
                 else:
                     move_cmd.linear.x = 0.00
-                    move_cmd.angular.z = 0.1
+                    move_cmd.angular.z = angular_speed
             self.cmd_vel.publish(move_cmd)
-            #self.r.sleep()
+            (position, rotation) = self.get_odom()
+            self.last_rotation = rotation
+            self.r.sleep()
 
         #rospy.loginfo("Stopping the robot...")
         #self.cmd_vel.publish(move_cmd())
