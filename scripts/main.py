@@ -77,11 +77,12 @@ class Operation():
     def get_scan(self):
         scan = rospy.wait_for_message('scan', LaserScan)
         scan_filter = []
-       
+        left = 0
+        right = 0
         samples = len(scan.ranges)  # The number of samples is defined in 
                                     # turtlebot3_<model>.gazebo.xacro file,
                                     # the default is 360.
-        samples_view = 1            # 1 <= samples_view <= samples
+        samples_view = 40            # 1 <= samples_view <= samples
         
         if samples_view > samples:
             samples_view = samples
@@ -95,13 +96,12 @@ class Operation():
             
             left_lidar_samples = scan.ranges[left_lidar_samples_ranges:]
             right_lidar_samples = scan.ranges[:right_lidar_samples_ranges]
-            scan_filter.extend(left_lidar_samples + right_lidar_samples)
-
-        for i in range(samples_view):
-            if scan_filter[i] == float('Inf'):
-                scan_filter[i] = 3.5
-            elif math.isnan(scan_filter[i]):
-                scan_filter[i] = 0
+            #scan_filter.extend(left_lidar_samples + right_lidar_samples)
+            
+        for i in range(samples_view/2):
+            left = left + left_lidar_samples[i]
+            right = right + right_lidar_samples[i]
+        scan_filter = min(left/(samples_view/2), right/(samples_view/2))
         
         return scan_filter
 
@@ -123,8 +123,8 @@ class Operation():
                 rospy.signal_shutdown("tf Exception")
 
         #(position, rotation) = self.get_odom()
-        linear_speed  = 0.3
-        angular_speed = 0.3
+        linear_speed  = 0.5
+        angular_speed = 0.5
         goal_z = np.deg2rad(goal_z)
         goal_distance = sqrt(pow(goal_x - position.x, 2) + pow(goal_y - position.y, 2))
         distance = goal_distance
@@ -144,15 +144,15 @@ class Operation():
                 rotation = 2*pi + rotation
             elif self.last_rotation < -pi+0.1 and rotation > 0:
                 rotation = -2*pi + rotation
-            move_cmd.angular.z = angular_speed * path_angle-rotation
+            #move_cmd.angular.z = angular_speed * path_angle-rotation
 
             distance = sqrt(pow((goal_x - x_start), 2) + pow((goal_y - y_start), 2))
             move_cmd.linear.x = min(linear_speed * distance, 0.1)
 
-            if move_cmd.angular.z > 0:
-                move_cmd.angular.z = min(move_cmd.angular.z, 1.5)
-            else:
-                move_cmd.angular.z = max(move_cmd.angular.z, -1.5)
+            #if move_cmd.angular.z > 0:
+            #    move_cmd.angular.z = min(move_cmd.angular.z, 1.5)
+            #else:
+            #    move_cmd.angular.z = max(move_cmd.angular.z, -1.5)
 
             self.last_rotation = rotation
             self.cmd_vel.publish(move_cmd)
@@ -199,18 +199,20 @@ class Operation():
             if len(count) > 0:
                 (x,y,z) = self.get_station()
                 lidar_distances = self.get_scan()
-                min_distance = min(lidar_distances)
+                #min_distance = min(lidar_distances)
+                min_distance = lidar_distances
                 if min_distance < SAFE_STOP_DISTANCE:
                     if turtlebot_moving:
                         move_cmd.linear.x = 0.0
                         move_cmd.linear.y = 0.0
-                        move_cmd.angular.z = 0.0
+                        move_cmd.angular.z = 0.0    
                         self.cmd_vel.publish(move_cmd)
                         turtlebot_moving = False
+                        rospy.loginfo('Distance of the obstacle : %f mm', min_distance*1000)
                         rospy.loginfo('Stop!')
                 else:
                     turtlebot_moving = True
-                    rospy.loginfo('Distance of the obstacle : %f', min_distance)
+                    rospy.loginfo('Distance of the obstacle : %f mm', min_distance*1000)
                     self.get_point(x, y, z)
             else:
                 pass
